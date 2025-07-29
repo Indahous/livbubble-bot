@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Liv Bubble</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #12c2e9, #c471ed, #f64f59);
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      color: white;
+      text-align: center;
+    }
+    h1 { margin-bottom: 20px; }
+    .bubble-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 15px;
+      max-width: 300px;
+      margin: 20px auto;
+    }
+    .bubble {
+      width: 60px;
+      height: 60px;
+      background: rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+      cursor: pointer;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+    }
+    .bubble:hover { transform: scale(1.1); }
+    .bubble.popped {
+      transform: scale(0);
+      background: #ff4757;
+    }
+    .btn {
+      margin-top: 20px;
+      padding: 12px 24px;
+      background: #00d2d3;
+      color: white;
+      border: none;
+      border-radius: 25px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <h1>Лопни 5 пузырей!</h1>
+  <div class="bubble-container" id="bubbles"></div>
+  <button class="btn" id="complete">Завершить игру</button>
+
+  <script>
+    const bubbles = document.getElementById('bubbles');
+    const completeBtn = document.getElementById('complete');
+    let poppedCount = 0;
+
+    for (let i = 0; i < 10; i++) {
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble';
+      bubble.innerHTML = '🫧';
+      bubble.addEventListener('click', () => {
+        if (bubble.classList.contains('popped') || poppedCount >= 5) return;
+        bubble.classList.add('popped');
+        poppedCount++;
+        if (poppedCount === 5) {
+          setTimeout(() => completeBtn.style.display = 'block', 1000);
+        }
+      });
+      bubbles.appendChild(bubble);
+    }
+
+    completeBtn.addEventListener('click', () => {
+      Telegram.WebApp.sendData(JSON.stringify({ game_completed: true, bubbles_popped: 5 }));
+    });
+  </script>
+</body>
+</html>
