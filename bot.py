@@ -12,7 +12,7 @@ CHANNEL_URL = f"https://t.me/{CHANNEL_USERNAME}"
 
 # URL твоего Web App (через ngrok или хостинг)
 # Пример: https://abcd-123-45-67-89.ngrok.io
-WEBAPP_URL = "https://Indahous.github.io/livbubble-webapp"  # ⚠️ Замени на свой!
+WEBAPP_URL = "https://livbubble-webapp.onrender.com"  # ⚠️ Замени на свой!
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
