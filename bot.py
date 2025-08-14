@@ -2,6 +2,7 @@
 import asyncio
 import logging
 import os
+import json
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
@@ -20,7 +21,7 @@ if not BOT_TOKEN:
     raise ValueError("❌ ОШИБКА: BOT_TOKEN не найден. Убедитесь, что файл .env существует и содержит BOT_TOKEN")
 
 # URL Web App (должен быть задеплоен)
-WEBAPP_URL = "https://livbubble-webapp.onrender.com"
+WEBAPP_URL = "https://livbubble-webapp.onrender.com"  # ВАЖНО: без пробелов!
 
 # Список администраторов (только они могут управлять ботом)
 ADMIN_IDS = []
@@ -58,7 +59,10 @@ SPAM_DOMAINS = [
 # Логирование
 # ================
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
 # ================
@@ -76,7 +80,10 @@ dp = Dispatcher()
 async def cmd_start(message: types.Message):
     """
     Отправляет приветствие и кнопку для запуска Web App.
+    ВАЖНО: ЭТОТ ОБРАБОТЧИК ДОЛЖЕН БЫТЬ ПЕРВЫМ!
     """
+    logger.info(f"Получена команда /start от пользователя {message.from_user.id}")
+    
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(
             text="🎮 Начать игру",
@@ -89,7 +96,11 @@ async def cmd_start(message: types.Message):
         "Вы подписаны — начинайте игру и участвуйте в розыгрыше каждый день в 12:00!"
     )
 
-    await message.answer(welcome_text, reply_markup=keyboard, parse_mode="Markdown")
+    try:
+        await message.answer(welcome_text, reply_markup=keyboard, parse_mode="Markdown")
+        logger.info(f"Отправлено приветствие пользователю {message.from_user.id}")
+    except Exception as e:
+        logger.error(f"Ошибка отправки приветствия: {e}")
 
 # ================
 # Функция проверки спама
@@ -124,14 +135,19 @@ async def filter_spam(message: types.Message):
     """
     Удаляет спам-сообщения, ссылки, подписи.
     Пропускает администраторов и команды.
+    ВАЖНО: Этот обработчик должен быть ПОСЛЕ /start
     """
+    logger.info(f"Получено сообщение от {message.from_user.id}: {message.text or '[без текста]'}")
+    
     # Пропускаем админов
     if message.from_user.id in ADMIN_IDS:
+        logger.info(f"Сообщение от админа {message.from_user.id} пропущено")
         return
 
-    # Пропускаем команды (важно!)
+    # Пропускаем команды
     if message.text and message.text.startswith('/'):
-        return  # ← Ключевое: не блокируем команды
+        logger.info(f"Команда /start от {message.from_user.id} уже обработана")
+        return
 
     # Блокировка пересланных сообщений
     if message.forward_date:
@@ -142,14 +158,20 @@ async def filter_spam(message: types.Message):
     # Проверка текста
     if message.text and is_spam(message.text):
         await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
-        await message.answer("❌ Спам-сообщение удалено.")
+        try:
+            await message.answer("❌ Спам-сообщение удалено.")
+        except:
+            pass
         logger.warning(f"Спам удалён от {message.from_user.id}: {message.text}")
         return
 
     # Проверка подписи
     if message.caption and is_spam(message.caption):
         await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
-        await message.answer("❌ Спам в подписи удалён.")
+        try:
+            await message.answer("❌ Спам в подписи удалён.")
+        except:
+            pass
         logger.warning(f"Спам в подписи удалён от {message.from_user.id}")
         return
 
@@ -160,7 +182,10 @@ async def filter_spam(message: types.Message):
                 url = message.text[entity.offset:entity.offset + entity.length].lower()
                 if any(domain in url for domain in SPAM_DOMAINS):
                     await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
-                    await message.answer("❌ Подозрительная ссылка удалена.")
+                    try:
+                        await message.answer("❌ Подозрительная ссылка удалена.")
+                    except:
+                        pass
                     logger.warning(f"Подозрительная ссылка удалена: {url}")
                     return
 
@@ -176,18 +201,20 @@ async def handle_web_app_data(message: types.Message):
     if not message.web_app_data:
         return
 
+    logger.info(f"Получены данные из Web App от {message.from_user.id}: {message.web_app_data.data}")
+    
     try:
-        data = message.web_app_data.data
+        data = json.loads(message.web_app_data.data)
 
-        if "game_completed" in data:
-            bubbles = data.split('bubbles_popped":')[1].split('}')[0] if 'bubbles_popped' in data else "неизвестно"
+        if data.get("game_completed"):
+            bubbles = data.get("bubbles_popped", "неизвестно")
             await message.answer(
                 f"🎉 Поздравляем! Ты успешно завершил игру!\n"
                 f"Лопнул пузырей: {bubbles}\n\n"
                 "Ты выполнил все задания. Жди награду!"
             )
-        elif "task_completed" in data:
-            task_id = data.split('task_id":')[1].split('}')[0] if 'task_id' in data else "неизвестно"
+        elif data.get("task_completed"):
+            task_id = data.get("task_id", "неизвестно")
             await message.answer(f"✅ Задание #{task_id} выполнено!")
     except Exception as e:
         logger.error(f"Ошибка обработки WebAppData: {e}")
@@ -200,12 +227,25 @@ async def handle_web_app_data(message: types.Message):
 async def main():
     logger.info("✅ Бот запущен и готов к работе...")
     logger.info("🌐 Ожидание сообщений...")
+    
+    # Проверяем доступность Web App
+    try:
+        import requests
+        response = requests.get(WEBAPP_URL)
+        if response.status_code == 200:
+            logger.info(f"✅ Web App доступен по адресу: {WEBAPP_URL}")
+        else:
+            logger.warning(f"⚠️ Web App недоступен. Статус: {response.status_code}")
+    except Exception as e:
+        logger.error(f"❌ Ошибка проверки Web App: {e}")
+    
     await dp.start_polling(bot)
 
 if __name__ == '__main__':
     try:
+        logger.info("�� Запуск бота...")
         asyncio.run(main())
     except KeyboardInterrupt:
         logger.info("Бот остановлен вручную.")
     except Exception as e:
-        logger.critical(f"Критическая ошибка: {e}")
+        logger.critical(f"Критическая ошибка: {e}", exc_info=True)
