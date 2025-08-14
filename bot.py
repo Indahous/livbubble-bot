@@ -20,7 +20,7 @@ if not BOT_TOKEN:
     raise ValueError("❌ ОШИБКА: BOT_TOKEN не найден. Убедитесь, что файл .env существует и содержит BOT_TOKEN")
 
 # URL Web App (должен быть задеплоен)
-WEBAPP_URL = "https://livbubble-web-v2.onrender.com"  # ← Убедись, что работает
+WEBAPP_URL = "https://livbubble-webapp.onrender.com"
 
 # Список администраторов (только они могут управлять ботом)
 ADMIN_IDS = []
@@ -29,7 +29,7 @@ if admin_ids_str:
     try:
         ADMIN_IDS = [int(id.strip()) for id in admin_ids_str.split(",")]
     except ValueError:
-        logger.error("❌ Ошибка: ADMIN_IDS должен содержать только числа, разделённые запятыми")
+        logging.getLogger(__name__).error("❌ Ошибка: ADMIN_IDS должен содержать только числа, разделённые запятыми")
 
 # ================
 # Списки спама
@@ -69,6 +69,29 @@ bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
 # ================
+# Команда /start
+# ================
+
+@dp.message(Command("start"))
+async def cmd_start(message: types.Message):
+    """
+    Отправляет приветствие и кнопку для запуска Web App.
+    """
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(
+            text="🎮 Начать игру",
+            web_app=WebAppInfo(url=WEBAPP_URL)
+        )]
+    ])
+
+    welcome_text = (
+        "🎮 Добро пожаловать в **Liv Bubble**!\n\n"
+        "Вы подписаны — начинайте игру и участвуйте в розыгрыше каждый день в 12:00!"
+    )
+
+    await message.answer(welcome_text, reply_markup=keyboard, parse_mode="Markdown")
+
+# ================
 # Функция проверки спама
 # ================
 
@@ -100,13 +123,17 @@ def is_spam(text: str) -> bool:
 async def filter_spam(message: types.Message):
     """
     Удаляет спам-сообщения, ссылки, подписи.
-    Пропускает администраторов.
+    Пропускает администраторов и команды.
     """
     # Пропускаем админов
     if message.from_user.id in ADMIN_IDS:
         return
 
-    # Блокировка пересланных сообщений (частый способ рассылки)
+    # Пропускаем команды (важно!)
+    if message.text and message.text.startswith('/'):
+        return  # ← Ключевое: не блокируем команды
+
+    # Блокировка пересланных сообщений
     if message.forward_date:
         await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
         logger.warning(f"Удалено пересланное сообщение от {message.from_user.id}")
@@ -119,7 +146,7 @@ async def filter_spam(message: types.Message):
         logger.warning(f"Спам удалён от {message.from_user.id}: {message.text}")
         return
 
-    # Проверка подписи (для фото, видео и т.д.)
+    # Проверка подписи
     if message.caption and is_spam(message.caption):
         await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
         await message.answer("❌ Спам в подписи удалён.")
@@ -136,29 +163,6 @@ async def filter_spam(message: types.Message):
                     await message.answer("❌ Подозрительная ссылка удалена.")
                     logger.warning(f"Подозрительная ссылка удалена: {url}")
                     return
-
-# ================
-# Команда /start
-# ================
-
-@dp.message(Command("start"))
-async def cmd_start(message: types.Message):
-    """
-    Отправляет приветствие и кнопку для запуска Web App.
-    """
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(
-            text="🎮 Начать игру",
-            web_app=WebAppInfo(url=WEBAPP_URL)
-        )]
-    ])
-
-    await message.answer(
-        "👋 Добро пожаловать в **Liv Bubble**!\n\n"
-        "Лопни 5 пузырей и выполни задания — получи награду!\n\n"
-        "Нажми кнопку ниже, чтобы начать игру.",
-        reply_markup=keyboard
-    )
 
 # ================
 # Обработка данных из Web App
