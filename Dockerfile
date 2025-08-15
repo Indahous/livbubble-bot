@@ -1,4 +1,4 @@
-# Dockerfile — Telegram Bot (Python)
+# Dockerfile — Telegram Bot + dummy server
 FROM python:3.11-slim
 
 # Рабочая директория
@@ -14,5 +14,5 @@ COPY . .
 # Устанавливаем переменные окружения
 ENV PYTHONUNBUFFERED=1
 
-# Запускаем бота
-CMD ["python", "bot.py"]
+# Запускаем бота в фоне + dummy server на порту 8080
+CMD (python bot.py &) && python -m http.server 8080
