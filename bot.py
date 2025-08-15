@@ -85,7 +85,7 @@ dp = Dispatcher()
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
     user_id = message.from_user.id
-    chat_id = "@livbubble"
+    chat_id = "@livbubble"  # Замени на свой канал
 
     try:
         # Проверяем статус пользователя в канале
@@ -93,7 +93,6 @@ async def cmd_start(message: types.Message):
         
         # Если пользователь — участник, админ или создатель
         if member.status in ["member", "administrator", "creator"]:
-            # Показываем кнопку игры
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(
                     text="🎮 Начать игру",
@@ -125,40 +124,23 @@ async def cmd_start(message: types.Message):
         logger.error(f"Ошибка проверки подписки: {e}")
         await message.answer("❌ Произошла ошибка при проверке подписки. Попробуйте позже.")
 
-    welcome_text = (
-        "🎮 Добро пожаловать в **Liv Bubble**!\n\n"
-        "Вы подписаны — начинайте игру и участвуйте в розыгрыше каждый день в 12:00!"
-    )
-
-    try:
-        await message.answer(welcome_text, reply_markup=keyboard, parse_mode="Markdown")
-        logger.info(f"Отправлено приветствие пользователю {message.from_user.id}")
-    except Exception as e:
-        logger.error(f"Ошибка отправки приветствия: {e}")
-
 # ================
 # Функция проверки спама
 # ================
 
 def is_spam(text: str) -> bool:
-    """
-    Проверяет текст на признаки спама.
-    Возвращает True, если спам найден.
-    """
     if not text:
         return False
 
     text_upper = text.upper()
     text_lower = text.lower()
 
-    # Проверка по доменам (самый точный способ)
     for domain in SPAM_DOMAINS:
         if domain in text_lower:
             return True
 
-    # Проверка по ключевым словам
     spam_signals = sum(1 for keyword in SPAM_KEYWORDS if keyword in text_upper)
-    return spam_signals >= 2  # Требуется минимум 2 совпадения
+    return spam_signals >= 2
 
 # ================
 # Обработчик спама
@@ -175,12 +157,10 @@ async def filter_spam(message: types.Message):
     
     # Пропускаем админов
     if message.from_user.id in ADMIN_IDS:
-        logger.info(f"Сообщение от админа {message.from_user.id} пропущено")
         return
 
-    # Пропускаем команды
+    # 🔐 КРИТИЧЕСКОЕ: пропускаем команды (иначе /start не сработает)
     if message.text and message.text.startswith('/'):
-        logger.info(f"Команда /start от {message.from_user.id} уже обработана")
         return
 
     # Блокировка пересланных сообщений
@@ -209,7 +189,7 @@ async def filter_spam(message: types.Message):
         logger.warning(f"Спам в подписи удалён от {message.from_user.id}")
         return
 
-    # Проверка URL в тексте
+    # Проверка URL
     if message.entities:
         for entity in message.entities:
             if entity.type == "url":
@@ -229,9 +209,6 @@ async def filter_spam(message: types.Message):
 
 @dp.message()
 async def handle_web_app_data(message: types.Message):
-    """
-    Обрабатывает данные, отправленные из Web App через Telegram.WebApp.sendData()
-    """
     if not message.web_app_data:
         return
 
@@ -262,7 +239,6 @@ async def main():
     logger.info("✅ Бот запущен и готов к работе...")
     logger.info("🌐 Ожидание сообщений...")
     
-    # Проверяем доступность Web App
     try:
         import requests
         response = requests.get(WEBAPP_URL)
