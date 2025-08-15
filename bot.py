@@ -84,18 +84,46 @@ dp = Dispatcher()
 
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
-    """
-    Отправляет приветствие и кнопку для запуска Web App.
-    ВАЖНО: ЭТОТ ОБРАБОТЧИК ДОЛЖЕН БЫТЬ ПЕРВЫМ!
-    """
-    logger.info(f"Получена команда /start от пользователя {message.from_user.id}")
-    
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(
-            text="🎮 Начать игру",
-            web_app=WebAppInfo(url=WEBAPP_URL)
-        )]
-    ])
+    user_id = message.from_user.id
+    chat_id = "@livbubble"
+
+    try:
+        # Проверяем статус пользователя в канале
+        member = await bot.get_chat_member(chat_id=chat_id, user_id=user_id)
+        
+        # Если пользователь — участник, админ или создатель
+        if member.status in ["member", "administrator", "creator"]:
+            # Показываем кнопку игры
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(
+                    text="🎮 Начать игру",
+                    web_app=WebAppInfo(url=WEBAPP_URL)
+                )]
+            ])
+
+            welcome_text = (
+                "🎮 Добро пожаловать в **Liv Bubble**!\n\n"
+                "Вы подписаны — начинайте игру и участвуйте в розыгрыше каждый день в 12:00!"
+            )
+
+            await message.answer(welcome_text, reply_markup=keyboard, parse_mode="Markdown")
+        else:
+            # Не подписан — просим подписаться
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(
+                    text="📢 Подписаться на канал",
+                    url="https://t.me/livbubble"
+                )]
+            ])
+
+            await message.answer(
+                "⚠️ Чтобы играть, вы должны быть подписаны на канал @livbubble.\n\n"
+                "Подпишитесь и нажмите /start, чтобы начать игру.",
+                reply_markup=keyboard
+            )
+    except Exception as e:
+        logger.error(f"Ошибка проверки подписки: {e}")
+        await message.answer("❌ Произошла ошибка при проверке подписки. Попробуйте позже.")
 
     welcome_text = (
         "🎮 Добро пожаловать в **Liv Bubble**!\n\n"
