@@ -11,13 +11,20 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 # Настройки
 # ================
 
-# Загружаем переменные окружения
-BOT_TOKEN = os.getenv("BOT_TOKEN")
+# Загружаем переменные окружения из .env (если есть)
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+    logger = logging.getLogger(__name__)
+    logger.info("✅ .env загружен")
+except ImportError:
+    logger = logging.getLogger(__name__)
+    logger.warning("⚠️ Модуль dotenv не установлен — используем переменные окружения напрямую")
 
-# Токен бота (обязательно через .env)
+# Токен бота (обязательно через .env или Render Environment Variables)
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 if not BOT_TOKEN:
-    raise ValueError("❌ ОШИБКА: BOT_TOKEN не найден. Убедитесь, что файл .env существует и содержит BOT_TOKEN")
+    raise ValueError("❌ ОШИБКА: BOT_TOKEN не найден. Убедитесь, что файл .env существует или переменная задана в Render")
 
 # URL Web App (должен быть задеплоен)
 WEBAPP_URL = "https://livbubble-webapp.onrender.com"  # ВАЖНО: без пробелов!
@@ -242,7 +249,7 @@ async def main():
 
 if __name__ == '__main__':
     try:
-        logger.info("�� Запуск бота...")
+        logger.info("🚀 Запуск бота...")
         asyncio.run(main())
     except KeyboardInterrupt:
         logger.info("Бот остановлен вручную.")
