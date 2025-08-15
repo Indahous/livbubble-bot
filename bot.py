@@ -12,8 +12,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 # ================
 
 # Загружаем переменные окружения
-from dotenv import load_dotenv
-load_dotenv()
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 # Токен бота (обязательно через .env)
 BOT_TOKEN = os.getenv("BOT_TOKEN")
