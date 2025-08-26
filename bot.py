@@ -1,4 +1,4 @@
-# bot.py — Полная версия с FastAPI, Web App, Админкой
+# bot.py — Полная версия с Web App, админкой и безопасностью
 
 import asyncio
 import logging
@@ -8,7 +8,7 @@ from fastapi import FastAPI, Request, HTTPException, Depends
 from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from aiogram import Bot, Dispatcher, types
-from aiogram.filters import Command, F
+from aiogram.filters import Command
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 
 # ================
@@ -38,11 +38,10 @@ except ImportError:
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 if not BOT_TOKEN:
-    raise ValueError("❌ ОШИБКА: BOT_TOKEN не найден. Убедитесь, что переменная задана в Render")
+    raise ValueError("❌ ОШИБКА: BOT_TOKEN не найден. Убедитесь, что файл .env существует или переменная задана в Render")
 
 WEBAPP_URL = os.getenv("WEBAPP_URL", "https://livbubble-webapp.onrender.com")
 CHANNEL_USERNAME = os.getenv("CHANNEL_USERNAME", "@livbubble")
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")  # 🔐 Пароль администратора
 
 # Список администраторов (только они могут управлять ботом)
 ADMIN_IDS = []
@@ -107,108 +106,23 @@ def require_admin_auth(request: Request):
     return True
 
 # ================
-# Маршрут для админки
-# ================
-
-@app.get("/admin", response_class=HTMLResponse)
-async def admin_panel():
-    try:
-        with open("admin/index.html", "r", encoding="utf-8") as f:
-            html_content = f.read()
-        return HTMLResponse(content=html_content, status_code=200)
-    except Exception as e:
-        logger.error(f"❌ Ошибка загрузки admin/index.html: {e}")
-        raise HTTPException(status_code=500, detail="Ошибка загрузки админ-панели")
-
-# ================
-# Проверка пароля
-# ================
-
-@app.post("/check-password")
-async def check_password(request: Request):
-    try:
-        data = await request.json()
-        password = data.get("password")
-        if password == ADMIN_PASSWORD:
-            response = JSONResponse({"success": True, "message": "Пароль верный"})
-            response.set_cookie(
-                key="authToken",
-                value=ADMIN_PASSWORD,
-                httponly=True,
-                secure=True,
-                max_age=30 * 60,  # 30 минут
-                samesite="lax",
-                path="/"  # ✅ Критично: кука доступна для всего домена
-            )
-            return response
-        else:
-            response = JSONResponse({"success": False, "message": "Неверный пароль"}, status_code=401)
-            response.delete_cookie("authToken", path="/")
-            return response
-    except Exception as e:
-        logger.error(f"❌ Ошибка проверки пароля: {e}")
-        return JSONResponse({"success": False, "message": "Ошибка проверки пароля"}, status_code=500)
-
-# ================
-# Выход
-# ================
-
-@app.post("/logout")
-async def logout():
-    response = JSONResponse({"success": True})
-    response.delete_cookie("authToken", path="/")
-    return response
-
-# ================
-# Чтение заданий
-# ================
-
-@app.get("/tasks.json")
-async def get_tasks():
-    try:
-        with open("tasks.json", "r", encoding="utf-8") as f:
-            data = json.load(f)
-        return data
-    except FileNotFoundError:
-        return {"priority_tasks": []}
-    except Exception as e:
-        logger.error(f"❌ Ошибка чтения tasks.json: {e}")
-        return {"priority_tasks": []}
-
-# ================
-# Сохранение заданий
-# ================
-
-@app.post("/save-tasks", dependencies=[Depends(require_admin_auth)])
-async def save_tasks(request: Request):
-    try:
-        data = await request.json()
-        priority_tasks = data.get("priority_tasks", [])
-        
-        if not isinstance(priority_tasks, list):
-            return JSONResponse({"success": False, "message": "priority_tasks должен быть массивом"}, status_code=400)
-
-        with open("tasks.json", "w", encoding="utf-8") as f:
-            json.dump({"priority_tasks": priority_tasks}, f, ensure_ascii=False, indent=2)
-
-        logger.info("✅ Задания успешно сохранены в tasks.json")
-        return JSONResponse({"success": True, "message": "Задания успешно сохранены!"})
-    except Exception as e:
-        logger.error(f"❌ Ошибка сохранения tasks.json: {e}")
-        return JSONResponse({"success": False, "message": "Ошибка сохранения"}, status_code=500)
-
-# ================
 # Команда /start
 # ================
 
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
+    """
+    Отправляет приветствие и кнопку для запуска Web App.
+    Проверяет подписку на канал.
+    """
     user_id = message.from_user.id
     chat_id = message.chat.id
 
     try:
+        # Проверяем подписку на канал
         member = await bot.get_chat_member(chat_id=CHANNEL_USERNAME, user_id=user_id)
         
+        # Если пользователь — участник, админ или создатель
         if member.status in ["member", "administrator", "creator"]:
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(
@@ -216,34 +130,129 @@ async def cmd_start(message: types.Message):
                     web_app=WebAppInfo(url=WEBAPP_URL)
                 )]
             ])
-            await message.answer(
-                "🎮 Добро пожаловать в <b>Liv Bubble</b>!\n\n"
-                "Вы подписаны — начинайте игру и участвуйте в розыгрыше каждый день в 12:00!",
-                reply_markup=keyboard,
-                parse_mode="HTML"
+
+            welcome_text = (
+                "🎮 Добро пожаловать в **Liv Bubble**!\n\n"
+                "Вы подписаны — начинайте игру и участвуйте в розыгрыше каждый день в 12:00!"
             )
+
+            await message.answer(welcome_text, reply_markup=keyboard, parse_mode="Markdown")
         else:
+            # Не подписан — просим подписаться
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(
                     text="📢 Подписаться на канал",
                     url=f"https://t.me/{CHANNEL_USERNAME.lstrip('@')}"
                 )]
             ])
+
             await message.answer(
                 "⚠️ Чтобы играть, вы должны быть подписаны на канал @livbubble.\n\n"
                 "Подпишитесь и нажмите /start, чтобы начать игру.",
                 reply_markup=keyboard
             )
     except Exception as e:
-        logger.error(f"❌ Ошибка проверки подписки: {e}")
-        await message.answer("⚠️ Ошибка проверки подписки. Попробуйте позже.")
+        logger.error(f"Ошибка проверки подписки: {e}")
+        await message.answer("❌ Произошла ошибка при проверке подписки. Попробуйте позже.")
+
+# ================
+# Функция проверки спама
+# ================
+
+def is_spam(text: str) -> bool:
+    """
+    Проверяет текст на признаки спама.
+    Возвращает True, если спам найден.
+    """
+    if not text:
+        return False
+
+    text_upper = text.upper()
+    text_lower = text.lower()
+
+    # Проверка по доменам (самый точный способ)
+    for domain in SPAM_DOMAINS:
+        if domain in text_lower:
+            return True
+
+    # Проверка по ключевым словам
+    spam_signals = sum(1 for keyword in SPAM_KEYWORDS if keyword in text_upper)
+    return spam_signals >= 2  # Требуется минимум 2 совпадения
+
+# ================
+# Обработчик спама
+# ================
+
+@dp.message()
+async def filter_spam(message: types.Message):
+    """
+    Удаляет спам-сообщения, ссылки, подписи.
+    Пропускает администраторов и команды.
+    ВАЖНО: Этот обработчик должен быть ПОСЛЕ /start
+    """
+    logger.info(f"Получено сообщение от {message.from_user.id}: {message.text or '[без текста]'}")
+    
+    # Пропускаем админов
+    if message.from_user.id in ADMIN_IDS:
+        logger.info(f"Сообщение от админа {message.from_user.id} пропущено")
+        return
+
+    # Пропускаем команды
+    if message.text and message.text.startswith('/'):
+        logger.info(f"Команда /start от {message.from_user.id} уже обработана")
+        return
+
+    # Блокировка пересланных сообщений
+    if message.forward_date:
+        try:
+            await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
+        except Exception as e:
+            logger.warning(f"Не удалось удалить пересланное сообщение: {e}")
+        return
+
+    # Проверка текста
+    if message.text and is_spam(message.text):
+        try:
+            await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
+            await message.answer("❌ Спам-сообщение удалено.")
+        except Exception as e:
+            logger.warning(f"Ошибка при удалении спама: {e}")
+        return
+
+    # Проверка подписи
+    if message.caption and is_spam(message.caption):
+        try:
+            await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
+            await message.answer("❌ Спам в подписи удалён.")
+        except Exception as e:
+            logger.warning(f"Ошибка при удалении спама в подписи: {e}")
+        return
+
+    # Проверка URL в тексте
+    if message.entities:
+        for entity in message.entities:
+            if entity.type == "url":
+                url = message.text[entity.offset:entity.offset + entity.length].lower()
+                if any(domain in url for domain in SPAM_DOMAINS):
+                    try:
+                        await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
+                        await message.answer("❌ Подозрительная ссылка удалена.")
+                    except Exception as e:
+                        logger.warning(f"Ошибка при удалении ссылки: {e}")
+                    return
 
 # ================
 # Обработка данных из Web App
 # ================
 
-@dp.message(F.web_app_data)
+@dp.message(types.WebAppData)
 async def handle_web_app_data(message: types.Message):
+    """
+    Обрабатывает данные, отправленные из Web App через Telegram.WebApp.sendData()
+    """
+    if not message.web_app_data:
+        return
+
     logger.info(f"Получены данные из Web App от {message.from_user.id}: {message.web_app_data.data}")
     
     try:
@@ -260,7 +269,7 @@ async def handle_web_app_data(message: types.Message):
             task_id = data.get("task_id", "неизвестно")
             await message.answer(f"✅ Задание #{task_id} выполнено!")
     except Exception as e:
-        logger.error(f"❌ Ошибка обработки WebAppData: {e}")
+        logger.error(f"Ошибка обработки WebAppData: {e}")
         await message.answer("⚠️ Ошибка при обработке данных.")
 
 # ================
