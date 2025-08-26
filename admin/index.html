@@ -1,0 +1,59 @@
+<!-- admin/index.html — Полная версия с паролем и адаптивным дизайном -->
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>🎯 Админ-панель Liv Bubble</title>
+  <link rel="stylesheet" href="admin.css" />
+  <script>
+    /**
+     * Функция проверки пароля при загрузке страницы
+     * Если пароль неверный — редирект на главную
+     */
+    function checkPassword() {
+      // 🔐 Замени "admin123" на свой пароль
+      const correctPassword = "admin123";
+      const pass = prompt("🔐 Введите пароль для доступа к админ-панели:");
+      if (pass === null) {
+        // Пользователь нажал "Отмена"
+        alert("Доступ отменён.");
+        window.location.href = "/";
+      } else if (pass !== correctPassword) {
+        alert("❌ Неверный пароль. Доступ запрещён.");
+        window.location.href = "/";
+      }
+      // Если пароль верный — страница загружается
+    }
+  </script>
+</head>
+<body onload="checkPassword()">
+  <div class="container">
+    <h1>🎯 Админ-панель</h1>
+    <button onclick="addTask()">+ Добавить задание</button>
+    <button onclick="saveTasks()">💾 Сохранить изменения</button>
+    <button onclick="logout()">🚪 Выйти</button>
+
+    <div id="tasks-list">
+      <!-- Список заданий будет сгенерирован здесь -->
+    </div>
+  </div>
+
+  <!-- Подключение основного скрипта -->
+  <script src="admin.js"></script>
+
+  <!-- Локальный скрипт для выхода -->
+  <script>
+    function logout() {
+      if (confirm('Вы уверены, что хотите выйти?')) {
+        fetch('/logout', { method: 'POST' })
+          .finally(() => {
+            document.cookie = "authToken=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+            window.location.href = '/';
+          });
+      }
+    }
+  </script>
+</body>
+</html>

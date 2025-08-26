@@ -1,11 +1,12 @@
 # bot.py
+
 import asyncio
 import logging
 import os
 import json
-from aiogram import Bot, Dispatcher
+from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command, F
-from aiogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 
 # ================
 # Настройка логирования (сразу в начале)
@@ -39,14 +40,14 @@ if not BOT_TOKEN:
 WEBAPP_URL = os.getenv("WEBAPP_URL", "https://livbubble-webapp.onrender.com")
 CHANNEL_USERNAME = os.getenv("CHANNEL_USERNAME", "@livbubble")
 
-# Список администраторов
+# Список администраторов (только они могут управлять ботом)
 ADMIN_IDS = []
 admin_ids_str = os.getenv("ADMIN_IDS", "")
 if admin_ids_str:
     try:
         ADMIN_IDS = [int(id.strip()) for id in admin_ids_str.split(",")]
     except ValueError:
-        logger.error("❌ Ошибка: ADMIN_IDS должен содержать только числа")
+        logger.error("❌ Ошибка: ADMIN_IDS должен содержать только числа, разделённые запятыми")
 
 # ================
 # Списки спама
@@ -83,11 +84,19 @@ dp = Dispatcher()
 # ================
 
 @dp.message(Command("start"))
-async def cmd_start(message: Message):
+async def cmd_start(message: types.Message):
+    """
+    Отправляет приветствие и кнопку для запуска Web App.
+    Проверяет подписку на канал.
+    """
     user_id = message.from_user.id
+    chat_id = message.chat.id
 
     try:
+        # Проверяем подписку на канал
         member = await bot.get_chat_member(chat_id=CHANNEL_USERNAME, user_id=user_id)
+        
+        # Если пользователь подписан
         if member.status in ["member", "administrator", "creator"]:
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(
@@ -102,6 +111,7 @@ async def cmd_start(message: Message):
                 parse_mode="HTML"
             )
         else:
+            # Не подписан — просим подписаться
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(
                     text="📢 Подписаться на канал",
@@ -122,34 +132,46 @@ async def cmd_start(message: Message):
 # ================
 
 def is_spam(text: str) -> bool:
+    """
+    Проверяет текст на признаки спама.
+    Возвращает True, если спам найден.
+    """
     if not text:
         return False
+
     text_upper = text.upper()
     text_lower = text.lower()
+
+    # Проверка по доменам (самый точный способ)
     for domain in SPAM_DOMAINS:
         if domain in text_lower:
             return True
+
+    # Проверка по ключевым словам
     spam_signals = sum(1 for keyword in SPAM_KEYWORDS if keyword in text_upper)
-    return spam_signals >= 2
+    return spam_signals >= 2  # Требуется минимум 2 совпадения
 
 # ================
 # Обработчик спама
 # ================
 
 @dp.message()
-async def filter_spam(message: Message):
+async def filter_spam(message: types.Message):
     """
-    Удаляет спам, но пропускает команды и админов.
-    ВАЖНО: после /start, чтобы не блокировать /start
+    Удаляет спам-сообщения, ссылки, подписи.
+    Пропускает администраторов и команды.
+    ВАЖНО: Этот обработчик должен быть ПОСЛЕ /start
     """
     logger.info(f"Получено сообщение от {message.from_user.id}: {message.text or '[без текста]'}")
-
+    
     # Пропускаем админов
     if message.from_user.id in ADMIN_IDS:
+        logger.info(f"Сообщение от админа {message.from_user.id} пропущено")
         return
 
     # Пропускаем команды
     if message.text and message.text.startswith('/'):
+        logger.info(f"Команда /start от {message.from_user.id} уже обработана")
         return
 
     # Блокировка пересланных сообщений
@@ -178,7 +200,7 @@ async def filter_spam(message: Message):
             logger.warning(f"Ошибка при удалении спама в подписи: {e}")
         return
 
-    # Проверка URL
+    # Проверка URL в тексте
     if message.entities:
         for entity in message.entities:
             if entity.type == "url":
@@ -196,11 +218,18 @@ async def filter_spam(message: Message):
 # ================
 
 @dp.message(F.web_app_data)
-async def handle_web_app_data(message: Message):
-    logger.info(f"Получены данные из Web App от {message.from_user.id}: {message.web_app_data.data}")
+async def handle_web_app_data(message: types.Message):
+    """
+    Обрабатывает данные, отправленные из Web App через Telegram.WebApp.sendData()
+    """
+    if not message.web_app_data:
+        return
 
+    logger.info(f"Получены данные из Web App от {message.from_user.id}: {message.web_app_data.data}")
+    
     try:
         data = json.loads(message.web_app_data.data)
+
         if data.get("game_completed"):
             bubbles = data.get("bubbles_popped", "неизвестно")
             await message.answer(
@@ -216,11 +245,40 @@ async def handle_web_app_data(message: Message):
         await message.answer("⚠️ Ошибка при обработке данных.")
 
 # ================
+# Админ-панель
+# ================
+
+@dp.message(Command("admin"))
+async def cmd_admin(message: types.Message):
+    """
+    Открывает админ-панель (если пользователь — админ)
+    """
+    if message.from_user.id not in ADMIN_IDS:
+        await message.answer("❌ Доступ запрещён.")
+        return
+
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(
+            text="🔐 Открыть админ-панель",
+            web_app=WebAppInfo(url=f"{WEBAPP_URL}/admin/")
+        )]
+    ])
+
+    await message.answer(
+        "🎯 Добро пожаловать в админ-панель!\n\n"
+        "Нажмите кнопку ниже, чтобы открыть панель управления.",
+        reply_markup=keyboard
+    )
+
+# ================
 # Запуск бота
 # ================
 
 async def main():
     logger.info("✅ Бот запущен и готов к работе...")
+    logger.info("🌐 Ожидание сообщений...")
+    
+    # Проверяем доступность Web App
     try:
         import requests
         response = requests.get(WEBAPP_URL, timeout=5)
@@ -230,7 +288,7 @@ async def main():
             logger.warning(f"⚠️ Web App недоступен. Статус: {response.status_code}")
     except Exception as e:
         logger.error(f"❌ Ошибка проверки Web App: {e}")
-
+    
     await dp.start_polling(bot)
 
 if __name__ == '__main__':
