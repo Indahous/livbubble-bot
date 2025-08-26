@@ -1,4 +1,4 @@
-<!-- admin/index.html — Полная версия с паролем и адаптивным дизайном -->
+<!-- admin/index.html — Полная версия с проверкой пароля через fetch -->
 
 <!DOCTYPE html>
 <html lang="ru">
@@ -13,18 +13,47 @@
      * Если пароль неверный — редирект на главную
      */
     function checkPassword() {
-      // 🔐 Замени "admin123" на свой пароль
-      const correctPassword = "admin123";
       const pass = prompt("🔐 Введите пароль для доступа к админ-панели:");
       if (pass === null) {
-        // Пользователь нажал "Отмена"
         alert("Доступ отменён.");
         window.location.href = "/";
-      } else if (pass !== correctPassword) {
-        alert("❌ Неверный пароль. Доступ запрещён.");
-        window.location.href = "/";
+      } else {
+        // Отправляем пароль на сервер для проверки
+        fetch('/check-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: pass }),
+          credentials: 'include' // 🔥 Отправляем куки
+        })
+        .then(response => response.json())
+        .then(data => {
+          if (data.success) {
+            alert("✅ Пароль верный. Доступ разрешён.");
+            loadTasks(); // Загружаем задания
+          } else {
+            alert(`❌ ${data.message}`);
+            window.location.href = "/";
+          }
+        })
+        .catch(error => {
+          console.error('❌ Ошибка проверки пароля:', error);
+          alert("⚠️ Ошибка сети. Проверьте подключение.");
+          window.location.href = "/";
+        });
       }
-      // Если пароль верный — страница загружается
+    }
+
+    /**
+     * Функция выхода
+     */
+    function logout() {
+      if (confirm('Вы уверены, что хотите выйти?')) {
+        fetch('/logout', { method: 'POST', credentials: 'include' })
+          .finally(() => {
+            document.cookie = "authToken=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+            window.location.href = '/admin/';
+          });
+      }
     }
   </script>
 </head>
@@ -40,20 +69,6 @@
     </div>
   </div>
 
-  <!-- Подключение основного скрипта -->
   <script src="admin.js"></script>
-
-  <!-- Локальный скрипт для выхода -->
-  <script>
-    function logout() {
-      if (confirm('Вы уверены, что хотите выйти?')) {
-        fetch('/logout', { method: 'POST' })
-          .finally(() => {
-            document.cookie = "authToken=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-            window.location.href = '/';
-          });
-      }
-    }
-  </script>
 </body>
 </html>
