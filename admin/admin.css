@@ -1,0 +1,101 @@
+/* admin/admin.css — Современный, чистый дизайн */
+body {
+  font-family: 'Segoe UI', sans-serif;
+  background: #1e1e2e;
+  color: white;
+  margin: 0;
+  padding: 20px;
+}
+
+.container {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+/* Кнопки */
+button {
+  margin: 10px;
+  padding: 12px 24px;
+  background: #00d2d3;
+  border: none;
+  border-radius: 25px;
+  color: white;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 600;
+  box-shadow: 0 4px 15px rgba(0, 210, 211, 0.3);
+  transition: all 0.3s ease;
+}
+
+button:hover {
+  background: #00bfa5;
+  transform: translateY(-2px);
+}
+
+button:active {
+  transform: translateY(0);
+}
+
+/* Блок задания */
+.task {
+  background: #2d2d3d;
+  padding: 20px;
+  margin: 15px 0;
+  border-radius: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+}
+
+.task > div {
+  flex: 1;
+  min-width: 300px;
+}
+
+/* Поля ввода */
+.task input,
+.task select {
+  margin: 6px 0;
+  padding: 10px;
+  width: 100%;
+  border-radius: 6px;
+  border: 1px solid #444;
+  background: #1a1a2a;
+  color: white;
+  font-size: 14px;
+}
+
+.task input::placeholder {
+  color: #aaa;
+}
+
+.task select {
+  background: #222;
+  cursor: pointer;
+}
+
+/* Удаление */
+.task button {
+  background: #e74c3c;
+  padding: 10px 15px;
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.task button:hover {
+  background: #c0392b;
+}
+
+/* Адаптив */
+@media (max-width: 600px) {
+  .task {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  button {
+    width: 100%;
+    margin: 5px 0;
+  }
+}
